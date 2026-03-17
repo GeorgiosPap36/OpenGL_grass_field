@@ -6,7 +6,7 @@
 #include <GLFW/glfw3.h>
 
 #define STB_IMAGE_IMPLEMENTATION
-#include "scene/demo_scene.cpp"
+#include "scene/grass_field_scene.cpp"
 
 
 // settings
@@ -42,7 +42,7 @@ int main() {
         return -1;
     }
 
-    DemoScene scene(SCR_WIDTH, SCR_HEIGHT);
+    GrassFieldScene scene(SCR_WIDTH, SCR_HEIGHT);
 
     double displayTimer = 0;
     double lastCounter = glfwGetTime();

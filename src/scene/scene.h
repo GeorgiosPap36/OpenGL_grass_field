@@ -14,9 +14,10 @@
 struct SceneNode {
     std::unique_ptr<Model> model;
     std::map<std::string, SceneNode> childNodes;
+    u_int modelInstances;
 
     void applyTransformation(const glm::vec3& position, const glm::vec3& rotation, const glm::vec3& scale);
-    void render(const glm::mat4& viewMatrix, const glm::mat4& projMatrix);
+    void render(Shader &shader, int globalVariableSize = 0);
 };
 
 class Scene {

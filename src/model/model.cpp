@@ -17,6 +17,12 @@ void Model::draw(Shader &shader, int globalVariableSize) {
     }
 }
 
+void Model::drawInstanced(Shader &shader, int instances, int globalVariableSize) {
+    for(unsigned int i = 0; i < meshes.size(); i++) {
+        meshes[i].drawInstanced(shader, instances, globalVariableSize);
+    }
+}
+
 glm::mat4 Model::modelMatrix() {
     glm::mat4 model = glm::mat4(1.0);
     model = glm::translate(model, transform.position);

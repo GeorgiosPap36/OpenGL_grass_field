@@ -42,6 +42,7 @@ class Mesh {
     Mesh(std::vector<Vertex> vertices, std::vector<unsigned int> indices, std::vector<Texture> textures);
 
     void draw(Shader &shader, int globalVariableSize = 0);
+    void drawInstanced(Shader &shader, int instances, int globalVariableSize = 0);
     void printVertices(int n = -1);
     void printIndices(int n = -1);
 

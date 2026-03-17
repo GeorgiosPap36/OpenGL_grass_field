@@ -51,6 +51,41 @@ void Mesh::draw(Shader &shader, int globalVariableSize)  {
     glActiveTexture(GL_TEXTURE0);
 }
 
+void Mesh::drawInstanced(Shader &shader, int instances, int globalVariableSize)  {
+    unsigned int diffuseNr = 1;
+    unsigned int specularNr = 1;
+    unsigned int normalNr = 1;
+    unsigned int heightNr = 1;
+    for(unsigned int i = 0; i < textures.size(); i++) {
+        glActiveTexture(GL_TEXTURE0 + i);
+
+        int number = 0;
+        std::string texType = textures[i].type;
+        if (texType == "texture_diffuse") {
+            number = diffuseNr++;
+        } else if (texType == "texture_specular") {
+            number = specularNr++; 
+        } else if (texType == "texture_normal") {
+            number = normalNr++; 
+        } else if (texType == "texture_height") {
+            number = heightNr++;
+        }
+        std::string numberStr = std::to_string(globalVariableSize + number);
+
+        // std::cout << "Texture number: " << texType + numberStr << std::endl;
+
+        glUniform1i(glGetUniformLocation(shader.ID, (texType + numberStr).c_str()), i);
+        glBindTexture(GL_TEXTURE_2D, textures[i].id);
+    }
+    
+    // draw mesh
+    glBindVertexArray(VAO);
+    glDrawElementsInstanced(GL_TRIANGLES, static_cast<unsigned int>(indices.size()), GL_UNSIGNED_INT, 0, instances);
+    glBindVertexArray(0);
+
+    glActiveTexture(GL_TEXTURE0);
+}
+
 
 void Mesh::printVertices(int n) {
     int vertSize = vertices.size();

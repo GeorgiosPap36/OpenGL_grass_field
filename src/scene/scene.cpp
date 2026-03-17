@@ -11,6 +11,10 @@ void SceneNode::applyTransformation(const glm::vec3& position, const glm::vec3& 
     }
 }
 
-void SceneNode::render(const glm::mat4& viewMatrix, const glm::mat4& projMatrix) {
-
+void SceneNode::render(Shader &shader, int globalVariableSize) {
+    if (modelInstances == 1) {
+        model->draw(shader, globalVariableSize);
+    } else if (modelInstances > 1) {
+        model->drawInstanced(shader, modelInstances, globalVariableSize);
+    }
 }

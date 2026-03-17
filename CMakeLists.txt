@@ -21,7 +21,7 @@ set(SOURCES
     src/scene/scene.cpp
 
     src/camera/basic_camera_controller.cpp
-    src/scene/demo_scene.cpp
+    src/scene/grass_field_scene.cpp
 
     dependencies/glad/glad.c)
 

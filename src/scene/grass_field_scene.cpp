@@ -10,7 +10,7 @@
 
 #include "../camera/basic_camera_controller.cpp"
 
-class DemoScene : public Scene {
+class GrassFieldScene : public Scene {
 
     struct DirectLight {
         glm::vec3 direction;
@@ -32,8 +32,17 @@ class DemoScene : public Scene {
         float _pad;
     };
 
+    struct alignas(16) InstancedData {
+        glm::vec4 position;
+        glm::vec4 color;
+
+        InstancedData(glm::vec4 position, glm::vec4 color) : position(position), color(color) {
+
+        }
+    };
+
     public:
-    DemoScene(unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) : 
+    GrassFieldScene(unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) : 
         SCR_WIDTH(SCR_WIDTH), SCR_HEIGHT(SCR_HEIGHT), camera(glm::vec3(0, 1, 0), glm::vec3(0, 0, -1), glm::vec3(0), 0, -90, 75) {
         
         setUpScene();
@@ -59,15 +68,17 @@ class DemoScene : public Scene {
             Shader* matShader = material->shader;
             matShader->use();
 
+            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
+
             for (const auto& [name, value] : material->uniforms) {
                 std::visit([&](auto&& v) {
                     matShader->set(name.c_str(), v);
                 }, value);
             }
 
-            for (const auto& model : renderBatch) {
-                matShader->set("model", model->modelMatrix());
-                model->draw(*matShader, GLOBAL_VARIABLE_SIZE);
+            for (const auto& sceneNode : renderBatch) {
+                matShader->set("model", sceneNode->model->modelMatrix());
+                sceneNode->render(*matShader, GLOBAL_VARIABLE_SIZE);
             }
         }
         
@@ -83,10 +94,16 @@ class DemoScene : public Scene {
     private:
     const int GLOBAL_VARIABLE_SIZE = 10;
     const int SHADOW_MAP_INDEX = 5;
+    const int INSTANCED_DATA_SSBO_INDEX = 4;
+
+    // Instanced data
+    GLuint instancedDataSSBO;
+    std::vector<InstancedData> instancedData;
+    int instancedDataSize = 10000, instancedDataRows = 100;
 
     unsigned int SCR_WIDTH, SCR_HEIGHT;
     BasicCameraController camera;
-    std::map<Material*, std::vector<Model*>> renderBatches;
+    std::map<Material*, std::vector<SceneNode*>> renderBatches;
     DirectLight dirLight;
     glm::mat4 projectionMat;
 
@@ -108,31 +125,67 @@ class DemoScene : public Scene {
         dirLight.diffuse = glm::vec3(0.4f); 
         dirLight.specular = glm::vec3(0.5f);
 
-        SceneNode testNode;
+        SceneNode instancesNode;
 
-        testNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
-        testNode.model->transform.position = glm::vec3(0, 0, 0);
-        testNode.model->transform.scale = glm::vec3(1.0, 1.0, 1.0);
-        testNode.model->transform.rotation = glm::vec3(0, 0, 0);
+        instancesNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
+        instancesNode.model->transform.position = glm::vec3(0, 0, 0);
+        instancesNode.model->transform.scale = glm::vec3(1.0, 1.0, 1.0);
+        instancesNode.model->transform.rotation = glm::vec3(0, 0, 0);
+        instancesNode.modelInstances = instancedDataSize;
 
-        SceneNode cubeNode;
-        cubeNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
+        // CREATE SSBO
+        int instanceOffsetX = 3, instanceOffsetY = 3;
+        int instancedDataCols = instancedDataSize / instancedDataRows;
+        int counter = 0;
+        for (int i = -instancedDataRows / 2; i < instancedDataRows / 2; i++) {
+            for (int j = -instancedDataCols / 2; j < instancedDataCols / 2; j++) {
+                float rowPercentage = (i + ((float) instancedDataRows / 2)) / (float) instancedDataRows;
+                float colPercentage = (j + ((float) instancedDataCols / 2)) / (float) instancedDataCols;
 
-        cubeNode.model->transform.position = glm::vec3(0, -7, 0);
-        cubeNode.model->transform.scale = glm::vec3(100, 0.05, 100);
-        cubeNode.model->transform.rotation = glm::vec3(0, 0, 0);
+                glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
 
-        rootNode.childNodes.emplace("testNode", std::move(testNode));
-        rootNode.childNodes.emplace("cubeNode", std::move(cubeNode));
+                InstancedData dt(glm::vec4(instanceOffsetX * j, 0, instanceOffsetY * i, 0), color);
+                instancedData.push_back(dt);
+            }
+        }
+
+        glGenBuffers(1, &instancedDataSSBO);
+        glBindBuffer(GL_SHADER_STORAGE_BUFFER, instancedDataSSBO);
+        glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(InstancedData) * instancedData.size(), instancedData.data(), GL_DYNAMIC_COPY);
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
+
+        SceneNode floorNode;
+        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
+
+        floorNode.model->transform.position = glm::vec3(0, -7, 0);
+        floorNode.model->transform.scale = glm::vec3(100, 0.05, 100);
+        floorNode.model->transform.rotation = glm::vec3(0, 0, 0);
+        floorNode.modelInstances = 1;
+
+        rootNode.childNodes.emplace("instancesNode", std::move(instancesNode));
+        rootNode.childNodes.emplace("floorNode", std::move(floorNode));
     }
 
     void setUpRenderBatches() {
-        auto& testNodeRef = rootNode.childNodes["testNode"];
-        auto& cubeNodeRef = rootNode.childNodes["cubeNode"];
-
-        Shader* shader = new Shader("../src/shaders/vertex_shaders/lighting_shadow_shader.vs", "../src/shaders/fragment_shaders/lighting_shadow_shader.fs");
+        auto& instancesNodeRef = rootNode.childNodes["instancesNode"];
+        auto& floorNodeRef = rootNode.childNodes["floorNode"];
 
         // Solid color Material
+        Shader* instancedShader = new Shader("../src/shaders/vertex_shaders/lighting_shadow_shader_instanced.vs", "../src/shaders/fragment_shaders/lighting_shadow_shader_instanced.fs");
+        Material* solidColorMaterialInstnced = new Material(instancedShader);
+
+        solidColorMaterialInstnced->bindBool("useTexture", false);
+        solidColorMaterialInstnced->bindVec3("dirLight.direction", dirLight.direction);
+        solidColorMaterialInstnced->bindVec3("dirLight.ambient", dirLight.ambient);
+        solidColorMaterialInstnced->bindVec3("dirLight.diffuse", dirLight.diffuse);
+        solidColorMaterialInstnced->bindVec3("dirLight.specular", dirLight.specular);
+        solidColorMaterialInstnced->bindVec3("color", glm::vec3(1.0));
+        solidColorMaterialInstnced->bindInt("shadowMap", SHADOW_MAP_INDEX);
+
+        renderBatches[solidColorMaterialInstnced].push_back(&instancesNodeRef);
+
+        // Solid color Material
+        Shader* shader = new Shader("../src/shaders/vertex_shaders/lighting_shadow_shader.vs", "../src/shaders/fragment_shaders/lighting_shadow_shader.fs");
         Material* solidColorMaterial = new Material(shader);
 
         solidColorMaterial->bindBool("useTexture", false);
@@ -143,8 +196,7 @@ class DemoScene : public Scene {
         solidColorMaterial->bindVec3("color", glm::vec3(1.0));
         solidColorMaterial->bindInt("shadowMap", SHADOW_MAP_INDEX);
 
-        renderBatches[solidColorMaterial].push_back(testNodeRef.model.get());
-        renderBatches[solidColorMaterial].push_back(cubeNodeRef.model.get());
+        renderBatches[solidColorMaterial].push_back(&floorNodeRef);
     }
 
     void setUpFBOs() {
@@ -203,9 +255,9 @@ class DemoScene : public Scene {
         depthShader->set("lightSpaceMatrix", dirLight.lightSpaceMatrix);
 
         for (const auto& [material, renderBatch] : renderBatches) {
-            for (const auto& model : renderBatch) {
-                depthShader->set("model", model->modelMatrix());
-                model->draw(*depthShader);
+            for (const auto& sceneNode : renderBatch) {
+                depthShader->set("model", sceneNode->model->modelMatrix());
+                sceneNode->render(*depthShader);
             }
         }
 
