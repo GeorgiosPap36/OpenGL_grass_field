@@ -6,6 +6,8 @@
 #define GLM_ENABLE_EXPERIMENTAL
 #include "glm/gtx/string_cast.hpp"
 
+#include <cstdlib>
+
 #include "../model/material.h"
 
 #include "../camera/basic_camera_controller.cpp"
@@ -53,11 +55,13 @@ class GrassFieldScene : public Scene {
 
         setUpUBOs();
 
-        std::cout << "Loaded: 'demo_scene'!" << std::endl;
+        std::cout << "Loaded: 'grass_field'!" << std::endl;
     }
 
     void render(float interPolation) override  {
-        generateDepthMap();
+        glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
+
+        // generateDepthMap();
 
         updateUBOs();
  
@@ -67,8 +71,6 @@ class GrassFieldScene : public Scene {
         for (const auto& [material, renderBatch] : renderBatches) {
             Shader* matShader = material->shader;
             matShader->use();
-
-            glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
 
             for (const auto& [name, value] : material->uniforms) {
                 std::visit([&](auto&& v) {
@@ -99,7 +101,7 @@ class GrassFieldScene : public Scene {
     // Instanced data
     GLuint instancedDataSSBO;
     std::vector<InstancedData> instancedData;
-    int instancedDataSize = 10000, instancedDataRows = 100;
+    int instancedDataSize = 4000000, instancedDataRows = 2000;
 
     unsigned int SCR_WIDTH, SCR_HEIGHT;
     BasicCameraController camera;
@@ -109,7 +111,7 @@ class GrassFieldScene : public Scene {
 
     GLuint frameUBO;
 
-    float nearPlane = 0.1, farPlane = 200.0;
+    float nearPlane = 0.1, farPlane = 500.0;
     // depthMap
     Shader* depthShader = new Shader("../src/shaders/vertex_shaders/depth_shader.vs", "../src/shaders/fragment_shaders/depth_shader.fs");
     unsigned int depthMapFBO, depthMap;
@@ -120,31 +122,47 @@ class GrassFieldScene : public Scene {
     void setUpScene() {
         projectionMat = glm::perspective(glm::radians(camera.fovY), (float) SCR_WIDTH / (float) SCR_HEIGHT, nearPlane, farPlane);
 
-        dirLight.direction = glm::vec3(0.0, -0.25, -0.75);
-        dirLight.ambient = glm::vec3(0.05f); 
-        dirLight.diffuse = glm::vec3(0.4f); 
-        dirLight.specular = glm::vec3(0.5f);
+        dirLight.direction = glm::normalize(glm::vec3(0.15, -1, -0.35));
+        dirLight.ambient = glm::vec3(0.25f); 
+        dirLight.diffuse = glm::vec3(0.2f); 
+        dirLight.specular = glm::vec3(0.1f);
+
+        SceneNode floorNode;
+        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
+
+        floorNode.model->transform.position = glm::vec3(0, -2, 0);
+        floorNode.model->transform.scale = glm::vec3(100, 0.05, 100);
+        floorNode.model->transform.rotation = glm::vec3(0, 0, 0);
+        floorNode.modelInstances = 1;
 
         SceneNode instancesNode;
 
         instancesNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
-        instancesNode.model->transform.position = glm::vec3(0, 0, 0);
-        instancesNode.model->transform.scale = glm::vec3(1.0, 1.0, 1.0);
+        instancesNode.model->transform.position = glm::vec3(0, -1.5, 0);
+        instancesNode.model->transform.scale = glm::vec3(0.05, 0.5, 0.05);
         instancesNode.model->transform.rotation = glm::vec3(0, 0, 0);
         instancesNode.modelInstances = instancedDataSize;
 
         // CREATE SSBO
-        int instanceOffsetX = 3, instanceOffsetY = 3;
         int instancedDataCols = instancedDataSize / instancedDataRows;
-        int counter = 0;
         for (int i = -instancedDataRows / 2; i < instancedDataRows / 2; i++) {
             for (int j = -instancedDataCols / 2; j < instancedDataCols / 2; j++) {
                 float rowPercentage = (i + ((float) instancedDataRows / 2)) / (float) instancedDataRows;
                 float colPercentage = (j + ((float) instancedDataCols / 2)) / (float) instancedDataCols;
 
-                glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
+                float rX = rand() / (float) RAND_MAX;
+                float rY = rand() / (float) RAND_MAX;
+                float rZ = rand() / (float) RAND_MAX;
 
-                InstancedData dt(glm::vec4(instanceOffsetX * j, 0, instanceOffsetY * i, 0), color);
+                glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
+                glm::vec4 pos = glm::vec4(
+                    (rowPercentage * floorNode.model->transform.scale.x - (1 - rowPercentage) * floorNode.model->transform.scale.x + 0.1 * (1 - rX)) / instancesNode.model->transform.scale.x, 
+                    -0.4 * (1 - rY) / instancesNode.model->transform.scale.y, 
+                    (colPercentage * floorNode.model->transform.scale.z - (1 - colPercentage) * floorNode.model->transform.scale.z +  0.1 * (1 - rZ)) / instancesNode.model->transform.scale.z, 
+                    0
+                );
+
+                InstancedData dt(pos, color);
                 instancedData.push_back(dt);
             }
         }
@@ -153,14 +171,6 @@ class GrassFieldScene : public Scene {
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, instancedDataSSBO);
         glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(InstancedData) * instancedData.size(), instancedData.data(), GL_DYNAMIC_COPY);
         glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
-
-        SceneNode floorNode;
-        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
-
-        floorNode.model->transform.position = glm::vec3(0, -7, 0);
-        floorNode.model->transform.scale = glm::vec3(100, 0.05, 100);
-        floorNode.model->transform.rotation = glm::vec3(0, 0, 0);
-        floorNode.modelInstances = 1;
 
         rootNode.childNodes.emplace("instancesNode", std::move(instancesNode));
         rootNode.childNodes.emplace("floorNode", std::move(floorNode));
@@ -240,7 +250,7 @@ class GrassFieldScene : public Scene {
     }
 
     void generateDepthMap() {
-        glm::mat4 lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, nearPlane, farPlane);
+        glm::mat4 lightProjection = glm::ortho(-100.0f, 100.0f, -100.0f, 100.0f, nearPlane, farPlane);
 
         glm::vec3 lightPos = -dirLight.direction * 10.0f;
         glm::mat4 lightView = glm::lookAt(lightPos, glm::vec3(0.0f), glm::vec3(0.0, 1.0, 0.0));
