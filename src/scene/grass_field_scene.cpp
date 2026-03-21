@@ -107,7 +107,7 @@ class GrassFieldScene : public Scene {
     // Instanced data
     GLuint instancedDataSSBO;
     std::vector<InstancedData> instancedData;
-    int instancedDataSize = 4000000, instancedDataRows = 2000;
+    int instancedDataSize = 2250000, instancedDataRows = 1500;
 
     unsigned int SCR_WIDTH, SCR_HEIGHT;
     BasicCameraController camera;
@@ -137,7 +137,7 @@ class GrassFieldScene : public Scene {
         dirLight.specular = glm::vec3(0.1f);
 
         SceneNode floorNode;
-        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
+        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/flat_plane/flat_plane.obj").string().c_str());
 
         floorNode.model->transform.position = glm::vec3(0, -2, 0);
         floorNode.model->transform.scale = glm::vec3(100, 0.05, 100);
@@ -146,9 +146,9 @@ class GrassFieldScene : public Scene {
 
         SceneNode instancesNode;
 
-        instancesNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/cube/Cube.obj").string().c_str());
-        instancesNode.model->transform.position = glm::vec3(0, -1.5, 0);
-        instancesNode.model->transform.scale = glm::vec3(0.05, 0.5, 0.05);
+        instancesNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/grass_blade/grass_blade.obj").string().c_str());
+        instancesNode.model->transform.position = glm::vec3(0, -2, 0);
+        instancesNode.model->transform.scale = glm::vec3(0.5, 0.25, 0.5);
         instancesNode.model->transform.rotation = glm::vec3(0, 0, 0);
         instancesNode.modelInstances = instancedDataSize;
 
@@ -400,7 +400,6 @@ class GrassFieldScene : public Scene {
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-
 
         stbi_set_flip_vertically_on_load(false);
         for (unsigned int i = 0; i < 6; i++) {
