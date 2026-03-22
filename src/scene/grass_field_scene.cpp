@@ -51,6 +51,8 @@ class GrassFieldScene : public Scene {
 
         setUpSkybox();
 
+        createHeightMapTexture();
+
         setUpRenderBatches();
 
         setUpFBOs();
@@ -69,6 +71,11 @@ class GrassFieldScene : public Scene {
  
         glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        glActiveTexture(GL_TEXTURE0 + HEIGHT_MAP_INDEX);
+        glBindTexture(GL_TEXTURE_2D, heightMapTexture);
+        glActiveTexture(GL_TEXTURE0 + NORMAL_MAP_INDEX);
+        glBindTexture(GL_TEXTURE_2D, normalMapTexture);
 
         for (const auto& [material, renderBatch] : renderBatches) {
             Shader* matShader = material->shader;
@@ -101,6 +108,8 @@ class GrassFieldScene : public Scene {
 
     private:
     const int GLOBAL_VARIABLE_SIZE = 10;
+    const int NORMAL_MAP_INDEX = 7;
+    const int HEIGHT_MAP_INDEX = 6;
     const int SHADOW_MAP_INDEX = 5;
     const int INSTANCED_DATA_SSBO_INDEX = 4;
 
@@ -127,6 +136,8 @@ class GrassFieldScene : public Scene {
     // skybox
     Shader* skyboxShader = new Shader("../src/shaders/vertex_shaders/skybox_shader.vs", "../src/shaders/fragment_shaders/skybox_shader.fs");
     unsigned int skyboxVAO, skyBoxTexture;
+    // heightmap
+    unsigned int heightMapTexture, normalMapTexture;
 
     void setUpScene() {
         projectionMat = glm::perspective(glm::radians(camera.fovY), (float) SCR_WIDTH / (float) SCR_HEIGHT, nearPlane, farPlane);
@@ -140,9 +151,11 @@ class GrassFieldScene : public Scene {
         floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/flat_plane/flat_plane.obj").string().c_str());
 
         floorNode.model->transform.position = glm::vec3(0, -2, 0);
-        floorNode.model->transform.scale = glm::vec3(100, 0.05, 100);
+        floorNode.model->transform.scale = glm::vec3(100, 1, 100);
         floorNode.model->transform.rotation = glm::vec3(0, 0, 0);
         floorNode.modelInstances = 1;
+
+        std::cout << "Floor (vertices, faces): "  << floorNode.model->meshes[0].vertices.size() << ", " << floorNode.model->meshes[0].indices.size() / 3 << std::endl;
 
         SceneNode instancesNode;
 
@@ -151,6 +164,8 @@ class GrassFieldScene : public Scene {
         instancesNode.model->transform.scale = glm::vec3(0.5, 0.25, 0.5);
         instancesNode.model->transform.rotation = glm::vec3(0, 0, 0);
         instancesNode.modelInstances = instancedDataSize;
+
+        std::cout << "Grass blade (vertices, faces): " << instancesNode.model->meshes[0].vertices.size() << ", " << instancesNode.model->meshes[0].indices.size() / 3 << std::endl;
 
         // CREATE SSBO
         int instancedDataCols = instancedDataSize / instancedDataRows;
@@ -201,21 +216,24 @@ class GrassFieldScene : public Scene {
         solidColorMaterialInstnced->bindVec3("color", glm::vec3(1.0));
         solidColorMaterialInstnced->bindInt("shadowMap", SHADOW_MAP_INDEX);
 
-        renderBatches[solidColorMaterialInstnced].push_back(&instancesNodeRef);
+        // renderBatches[solidColorMaterialInstnced].push_back(&instancesNodeRef);
 
         // Solid color Material
-        Shader* shader = new Shader("../src/shaders/vertex_shaders/lighting_shadow_shader.vs", "../src/shaders/fragment_shaders/lighting_shadow_shader.fs");
-        Material* solidColorMaterial = new Material(shader);
+        Shader* floorShader = new Shader("../src/shaders/vertex_shaders/floor_shader.vs", "../src/shaders/fragment_shaders/floor_shader.fs");
+        Material* floorMaterial = new Material(floorShader);
 
-        solidColorMaterial->bindBool("useTexture", false);
-        solidColorMaterial->bindVec3("dirLight.direction", dirLight.direction);
-        solidColorMaterial->bindVec3("dirLight.ambient", dirLight.ambient);
-        solidColorMaterial->bindVec3("dirLight.diffuse", dirLight.diffuse);
-        solidColorMaterial->bindVec3("dirLight.specular", dirLight.specular);
-        solidColorMaterial->bindVec3("color", glm::vec3(1.0));
-        solidColorMaterial->bindInt("shadowMap", SHADOW_MAP_INDEX);
+        floorMaterial->bindBool("useTexture", false);
+        floorMaterial->bindVec3("dirLight.direction", dirLight.direction);
+        floorMaterial->bindVec3("dirLight.ambient", dirLight.ambient);
+        floorMaterial->bindVec3("dirLight.diffuse", dirLight.diffuse);
+        floorMaterial->bindVec3("dirLight.specular", dirLight.specular);
+        floorMaterial->bindVec3("color", glm::vec3(1.0));
+        floorMaterial->bindInt("shadowMap", SHADOW_MAP_INDEX);
+        floorMaterial->bindInt("heightMap", HEIGHT_MAP_INDEX);
+        floorMaterial->bindInt("normalMap", NORMAL_MAP_INDEX);
+        floorMaterial->bindFloat("terrainSize", floorNodeRef.model->transform.scale.x);
 
-        renderBatches[solidColorMaterial].push_back(&floorNodeRef);
+        renderBatches[floorMaterial].push_back(&floorNodeRef);
     }
 
     void setUpFBOs() {
@@ -385,12 +403,12 @@ class GrassFieldScene : public Scene {
         glBindBuffer(GL_ARRAY_BUFFER, 0);
 
         std::string facesCubemap[6] = {
-            std::filesystem::path("../assets/textures/skybox_cube_map/px.png").string().c_str(),
-            std::filesystem::path("../assets/textures/skybox_cube_map/nx.png").string().c_str(),
-            std::filesystem::path("../assets/textures/skybox_cube_map/py.png").string().c_str(),
-            std::filesystem::path("../assets/textures/skybox_cube_map/ny.png").string().c_str(),
-            std::filesystem::path("../assets/textures/skybox_cube_map/pz.png").string().c_str(),
-            std::filesystem::path("../assets/textures/skybox_cube_map/nz.png").string().c_str(),
+            std::filesystem::path("../assets/textures/skybox_cube_map/px.png").string(),
+            std::filesystem::path("../assets/textures/skybox_cube_map/nx.png").string(),
+            std::filesystem::path("../assets/textures/skybox_cube_map/py.png").string(),
+            std::filesystem::path("../assets/textures/skybox_cube_map/ny.png").string(),
+            std::filesystem::path("../assets/textures/skybox_cube_map/pz.png").string(),
+            std::filesystem::path("../assets/textures/skybox_cube_map/nz.png").string()
         };
 
         glGenTextures(1, &skyBoxTexture);
@@ -444,6 +462,68 @@ class GrassFieldScene : public Scene {
         glBindVertexArray(0);
 
         glDepthFunc(GL_LESS);
+    }
+
+    void createHeightMapTexture() {
+        glGenTextures(1, &heightMapTexture);
+        glBindTexture(GL_TEXTURE_2D, heightMapTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+        std::string heightmapTexturePath = std::filesystem::path("../assets/textures/heightmap.png").string();
+
+        stbi_set_flip_vertically_on_load(true);
+        int width, height, nrChannels;
+        unsigned char* heightData = stbi_load(heightmapTexturePath.c_str(), & width, &height, &nrChannels, 0);
+        if (heightData) {
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                width,
+                height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                heightData
+            );
+            stbi_image_free(heightData);
+        } else {
+            std::cout << "Failed to load texture" << heightmapTexturePath << std::endl;
+            stbi_image_free(heightData);
+
+        }
+
+        glGenTextures(1, &normalMapTexture);
+        glBindTexture(GL_TEXTURE_2D, normalMapTexture);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+        std::string normalmapTexturePath = std::filesystem::path("../assets/textures/normalmap.png").string();
+
+        unsigned char* normalData = stbi_load(normalmapTexturePath.c_str(), & width, &height, &nrChannels, 0);
+        if (normalData) {
+            glTexImage2D(
+                GL_TEXTURE_2D,
+                0,
+                GL_RGBA,
+                width,
+                height,
+                0,
+                GL_RGBA,
+                GL_UNSIGNED_BYTE,
+                normalData
+            );
+            stbi_image_free(normalData);
+        } else {
+            std::cout << "Failed to load texture" << heightmapTexturePath << std::endl;
+            stbi_image_free(normalData);
+
+        }
     }
 
 };

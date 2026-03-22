@@ -73,5 +73,6 @@ void main() {
 
     vec3 result = (1.0 - shadow) * dirLightColor;
 
-    FragColor = vec4(result, 1.0);
+    // FragColor = vec4(result, 1.0);
+    FragColor = vec4(norm, 1.0);
 }
