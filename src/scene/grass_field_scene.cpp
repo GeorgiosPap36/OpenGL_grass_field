@@ -138,6 +138,7 @@ class GrassFieldScene : public Scene {
     unsigned int skyboxVAO, skyBoxTexture;
     // heightmap
     unsigned int heightMapTexture, normalMapTexture;
+    float maxFloorHeight = 2;
 
     void setUpScene() {
         projectionMat = glm::perspective(glm::radians(camera.fovY), (float) SCR_WIDTH / (float) SCR_HEIGHT, nearPlane, farPlane);
@@ -148,7 +149,7 @@ class GrassFieldScene : public Scene {
         dirLight.specular = glm::vec3(0.1f);
 
         SceneNode floorNode;
-        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/flat_plane/flat_plane.obj").string().c_str());
+        floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/flat_plane_3/flat_plane.obj").string().c_str());
 
         floorNode.model->transform.position = glm::vec3(0, -2, 0);
         floorNode.model->transform.scale = glm::vec3(100, 1, 100);
@@ -232,6 +233,7 @@ class GrassFieldScene : public Scene {
         floorMaterial->bindInt("heightMap", HEIGHT_MAP_INDEX);
         floorMaterial->bindInt("normalMap", NORMAL_MAP_INDEX);
         floorMaterial->bindFloat("terrainSize", floorNodeRef.model->transform.scale.x);
+        floorMaterial->bindFloat("maxHeight", maxFloorHeight);
 
         renderBatches[floorMaterial].push_back(&floorNodeRef);
     }
@@ -469,60 +471,78 @@ class GrassFieldScene : public Scene {
         glBindTexture(GL_TEXTURE_2D, heightMapTexture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        std::string heightmapTexturePath = std::filesystem::path("../assets/textures/heightmap.png").string();
+        std::string heightmapTexturePath = std::filesystem::path("../assets/textures/heightmap_circle.png").string();
 
         stbi_set_flip_vertically_on_load(true);
         int width, height, nrChannels;
         unsigned char* heightData = stbi_load(heightmapTexturePath.c_str(), & width, &height, &nrChannels, 0);
+
+        GLenum format;
+        if (nrChannels == 1) {
+            format = GL_RED;
+        } else if (nrChannels == 3) {
+            format = GL_RGB;
+        } else if (nrChannels == 4) {
+            format = GL_RGBA;
+        } 
+
+        std::cout << nrChannels << std::endl;
+
         if (heightData) {
             glTexImage2D(
                 GL_TEXTURE_2D,
                 0,
-                GL_RGBA,
+                format,
                 width,
                 height,
                 0,
-                GL_RGBA,
+                format,
                 GL_UNSIGNED_BYTE,
                 heightData
             );
             stbi_image_free(heightData);
         } else {
-            std::cout << "Failed to load texture" << heightmapTexturePath << std::endl;
+            std::cout << "Failed to load texture: " << heightmapTexturePath << std::endl;
             stbi_image_free(heightData);
-
         }
 
         glGenTextures(1, &normalMapTexture);
         glBindTexture(GL_TEXTURE_2D, normalMapTexture);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
-        std::string normalmapTexturePath = std::filesystem::path("../assets/textures/normalmap.png").string();
+        std::string normalmapTexturePath = std::filesystem::path("../assets/textures/normalmap_circle.png").string();
 
         unsigned char* normalData = stbi_load(normalmapTexturePath.c_str(), & width, &height, &nrChannels, 0);
+        if (nrChannels == 1) {
+            format = GL_RED;
+        } else if (nrChannels == 3) {
+            format = GL_RGB;
+        } else if (nrChannels == 4) {
+            format = GL_RGBA;
+        } 
+
         if (normalData) {
             glTexImage2D(
                 GL_TEXTURE_2D,
                 0,
-                GL_RGBA,
+                format,
                 width,
                 height,
                 0,
-                GL_RGBA,
+                format,
                 GL_UNSIGNED_BYTE,
                 normalData
             );
             stbi_image_free(normalData);
         } else {
-            std::cout << "Failed to load texture" << heightmapTexturePath << std::endl;
+            std::cout << "Failed to load texture: " << normalmapTexturePath << std::endl;
             stbi_image_free(normalData);
-
         }
     }
 

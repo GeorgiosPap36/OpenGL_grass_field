@@ -12,11 +12,11 @@ layout (std140, binding = 3) uniform FrameUniforms {
 	vec3 cameraPos;
 };
 
-
 layout(location = 6) uniform sampler2D heightMap;
 layout(location = 7) uniform sampler2D normalMap;
 uniform mat4 model;
 uniform float terrainSize;
+uniform float maxHeight;
 
 out vec3 pos;
 out vec3 normal;
@@ -33,15 +33,16 @@ void main() {
 
     float height = texture(heightMap, uv).r;
 	
-    worldPos.y += height;
+    worldPos.y += height * maxHeight;
 
     fragPos = worldPos.xyz;
     pos = worldPos.xyz;
     viewPos = cameraPos;
     fragPosLightSpace = lightSpaceMatrix * worldPos;
 
-    vec3 n = texture(normalMap, uv).xyz;
-    normal = mat3(transpose(inverse(model))) * n;
+    vec3 n = texture(normalMap, uv).rgb;
+    n = n * 2.0 - 1.0;
+    normal = normalize(vec3(n.x, n.z, n.y));
 
     gl_Position = projection * view * worldPos;
 }

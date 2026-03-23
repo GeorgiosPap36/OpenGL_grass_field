@@ -65,7 +65,7 @@ float directLightShadowCalculation(vec4 fragPosLightSpace, vec3 normal, vec3 lig
 }
 
 void main() {    
-    vec3 norm = normalize(normal);
+    vec3 norm = normal;// normalize(normal);
     vec3 viewDir = normalize(viewPos - fragPos);
 
     vec3 dirLightColor = calcDirLight(dirLight, norm, viewDir);
@@ -73,6 +73,6 @@ void main() {
 
     vec3 result = (1.0 - shadow) * dirLightColor;
 
-    // FragColor = vec4(result, 1.0);
-    FragColor = vec4(norm, 1.0);
+    FragColor = vec4(result, 1.0);
+    // FragColor = vec4(normal, 1.0);
 }
