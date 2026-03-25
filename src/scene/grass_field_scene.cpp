@@ -116,7 +116,7 @@ class GrassFieldScene : public Scene {
     // Instanced data
     GLuint instancedDataSSBO;
     std::vector<InstancedData> instancedData;
-    int instancedDataSize = 2250000, instancedDataRows = 1500;
+    int instancedDataSize = 2250000, instancedDataRows = 1500, subSetsRoot = 2;
 
     unsigned int SCR_WIDTH, SCR_HEIGHT;
     BasicCameraController camera;
@@ -138,7 +138,7 @@ class GrassFieldScene : public Scene {
     unsigned int skyboxVAO, skyBoxTexture;
     // heightmap
     unsigned int heightMapTexture, normalMapTexture;
-    float maxFloorHeight = 2;
+    float maxFloorHeight = 10;
 
     void setUpScene() {
         projectionMat = glm::perspective(glm::radians(camera.fovY), (float) SCR_WIDTH / (float) SCR_HEIGHT, nearPlane, farPlane);
@@ -146,15 +146,16 @@ class GrassFieldScene : public Scene {
         dirLight.direction = glm::normalize(glm::vec3(0.15, -1, -0.35));
         dirLight.ambient = glm::vec3(0.25f); 
         dirLight.diffuse = glm::vec3(0.5f); 
-        dirLight.specular = glm::vec3(0.1f);
+        dirLight.specular = glm::vec3(0.2f);
 
         SceneNode floorNode;
         floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/flat_plane_3/flat_plane.obj").string().c_str());
 
         floorNode.model->transform.position = glm::vec3(0, -2, 0);
-        floorNode.model->transform.scale = glm::vec3(100, 1, 100);
+        floorNode.model->transform.scale = glm::vec3(200, 1, 200);
         floorNode.model->transform.rotation = glm::vec3(0, 0, 0);
         floorNode.modelInstances = 1;
+        floorNode.isActive = true;
 
         std::cout << "Floor (vertices, faces): "  << floorNode.model->meshes[0].vertices.size() << ", " << floorNode.model->meshes[0].indices.size() / 3 << std::endl;
 
@@ -162,35 +163,63 @@ class GrassFieldScene : public Scene {
 
         instancesNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/grass_blade/grass_blade.obj").string().c_str());
         instancesNode.model->transform.position = glm::vec3(0, -2, 0);
-        instancesNode.model->transform.scale = glm::vec3(0.5, 0.25, 0.5);
+        instancesNode.model->transform.scale = glm::vec3(0.15, 0.1, 0.15);
         instancesNode.model->transform.rotation = glm::vec3(0, 0, 0);
         instancesNode.modelInstances = instancedDataSize;
+        instancesNode.isActive = true;
 
         std::cout << "Grass blade (vertices, faces): " << instancesNode.model->meshes[0].vertices.size() << ", " << instancesNode.model->meshes[0].indices.size() / 3 << std::endl;
 
         // CREATE SSBO
+        std::string heightmapTexturePath = std::filesystem::path("../assets/textures/heightmap_circle.png").string();
+
+        stbi_set_flip_vertically_on_load(true);
+        int width, height, nrChannels;
+        unsigned char* heightData = stbi_load(heightmapTexturePath.c_str(), & width, &height, &nrChannels, 0);
+
         int instancedDataCols = instancedDataSize / instancedDataRows;
         for (int i = -instancedDataRows / 2; i < instancedDataRows / 2; i++) {
             for (int j = -instancedDataCols / 2; j < instancedDataCols / 2; j++) {
-                float rowPercentage = (i + ((float) instancedDataRows / 2)) / (float) instancedDataRows;
-                float colPercentage = (j + ((float) instancedDataCols / 2)) / (float) instancedDataCols;
 
                 float rX = rand() / (float) RAND_MAX;
                 float rY = rand() / (float) RAND_MAX;
                 float rZ = rand() / (float) RAND_MAX;
 
-                glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
+                float rowPercentage = (i + instancedDataRows / 2.0 + 0.5) / instancedDataRows;
+                float colPercentage = (j + instancedDataCols / 2.0 + 0.5) / instancedDataCols;
+
+                float u = colPercentage;
+                float v = rowPercentage;
+
+                int x = (int)(u * (width - 1));
+                int y = (int)(v * (height - 1));
+
+                unsigned char* pixelOffset = heightData + (y * width + x) * nrChannels;
+                float heightPercentage = pixelOffset[0] / 255.0;
+
+                float xPos = (u - 0.5) * floorNode.model->transform.scale.x;
+                float zPos = (v - 0.5) * floorNode.model->transform.scale.z;
+                float yPos = heightPercentage * maxFloorHeight;
+
+                // if (heightPercentage > 0) {
+                //     std::cout << "yPos: " << yPos << std::endl;
+                // }
+
                 glm::vec4 pos = glm::vec4(
-                    (rowPercentage * floorNode.model->transform.scale.x - (1 - rowPercentage) * floorNode.model->transform.scale.x + 0.1 * (1 - rX)) / instancesNode.model->transform.scale.x, 
-                    -0.3 * (1 - rY) / instancesNode.model->transform.scale.y, 
-                    (colPercentage * floorNode.model->transform.scale.z - (1 - colPercentage) * floorNode.model->transform.scale.z +  0.1 * (1 - rZ)) / instancesNode.model->transform.scale.z, 
+                    (xPos + 0.2 * (1 - rX)) / instancesNode.model->transform.scale.x,
+                    (yPos - 0.3 * (1 - rY)) / instancesNode.model->transform.scale.y,
+                    (zPos + 0.2 * (1 - rZ)) / instancesNode.model->transform.scale.z,
                     0
                 );
+
+                // glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
+                glm::vec4 color = glm::vec4(0.486, 0.998, 0, 0);
 
                 InstancedData dt(pos, color);
                 instancedData.push_back(dt);
             }
         }
+        stbi_image_free(heightData);
 
         glGenBuffers(1, &instancedDataSSBO);
         glBindBuffer(GL_SHADER_STORAGE_BUFFER, instancedDataSSBO);
@@ -217,7 +246,7 @@ class GrassFieldScene : public Scene {
         solidColorMaterialInstnced->bindVec3("color", glm::vec3(1.0));
         solidColorMaterialInstnced->bindInt("shadowMap", SHADOW_MAP_INDEX);
 
-        // renderBatches[solidColorMaterialInstnced].push_back(&instancesNodeRef);
+        renderBatches[solidColorMaterialInstnced].push_back(&instancesNodeRef);
 
         // Solid color Material
         Shader* floorShader = new Shader("../src/shaders/vertex_shaders/floor_shader.vs", "../src/shaders/fragment_shaders/floor_shader.fs");

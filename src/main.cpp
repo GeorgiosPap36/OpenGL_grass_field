@@ -10,8 +10,8 @@
 
 
 // settings
-const unsigned int SCR_WIDTH = 1280;
-const unsigned int SCR_HEIGHT = 720;
+const unsigned int SCR_WIDTH = 1600;
+const unsigned int SCR_HEIGHT = 900;
 const std::string WINDOW_TITLE = "OpenGL_grass_field";
 
 const double SEC_PER_UPDATE = 1.0 / 30.0;

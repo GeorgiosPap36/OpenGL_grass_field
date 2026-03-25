@@ -12,6 +12,10 @@ void SceneNode::applyTransformation(const glm::vec3& position, const glm::vec3& 
 }
 
 void SceneNode::render(Shader &shader, int globalVariableSize) {
+    if (!isActive) {
+        return;
+    }
+
     if (modelInstances == 1) {
         model->draw(shader, globalVariableSize);
     } else if (modelInstances > 1) {

@@ -22,9 +22,6 @@ in vec4 fragPosLightSpace;
 
 uniform DirLight dirLight;
 
-uniform sampler2D texture_diffuse11;
-uniform sampler2D texture_ambient11;
-uniform sampler2D texture_specular11;
 
 layout(location = 5) uniform sampler2D shadowMap;
 
