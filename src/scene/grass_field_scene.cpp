@@ -254,10 +254,6 @@ class GrassFieldScene : public Scene {
                 glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(InstancedData) * instancedData.size(), instancedData.data(), GL_DYNAMIC_COPY);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
 
-                // rootNode.childNodes.emplace("instancesNode" + subsetI + subsetJ, std::move(instancesNode));
-                // instancedDataSSBOMap.emplace("instancesNode" + subsetI + subsetJ, instancedDataSSBO);
-                // instancedDataMap.emplace("instancesNode" + subsetI + subsetJ, instancedData);
-
                 std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
 
                 auto [it, inserted] = rootNode.childNodes.emplace(key, std::move(instancesNode));
