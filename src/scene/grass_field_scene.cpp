@@ -47,6 +47,8 @@ class GrassFieldScene : public Scene {
     GrassFieldScene(unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) : 
         SCR_WIDTH(SCR_WIDTH), SCR_HEIGHT(SCR_HEIGHT), camera(glm::vec3(0, 1, 0), glm::vec3(0, 0, -1), glm::vec3(0), 0, -90, 75) {
         
+        std::cout << "Entering grass_field scene!" << std::endl;
+
         setUpScene();
 
         setUpSkybox();
@@ -105,6 +107,15 @@ class GrassFieldScene : public Scene {
 
     void update(float dt, std::map<int, bool>& keyboard, glm::vec2 mouseMovement) override {
         camera.update(dt, keyboard, mouseMovement);
+
+        for (auto& [key, node] : rootNode.childNodes) {
+            if (key == "floorNode") {
+                continue;
+            }
+
+            Model& model = *node.model;
+            node.isActive = glm::distance(model.transform.position, camera.position) < 60;
+        }
     }
 
     private:
@@ -117,7 +128,8 @@ class GrassFieldScene : public Scene {
     // Instanced data
     std::map<SceneNode*, GLuint> instancedDataSSBOMap;
     std::map<SceneNode*, std::vector<InstancedData>> instancedDataMap;
-    int instancedDataSize = 2250000, instancedDataRows = 1500, subSetsRoot = 2;
+    int instancedDataSize = 6250000, instancedDataRows = 2500, subSetsRoot = 20;
+    float floorSize = 400.0;
 
     unsigned int SCR_WIDTH, SCR_HEIGHT;
     BasicCameraController camera;
@@ -142,6 +154,8 @@ class GrassFieldScene : public Scene {
     float maxFloorHeight = 10;
 
     void setUpScene() {
+        std::cout << "Setting up scene!" << std::endl;
+
         projectionMat = glm::perspective(glm::radians(camera.fovY), (float) SCR_WIDTH / (float) SCR_HEIGHT, nearPlane, farPlane);
 
         dirLight.direction = glm::normalize(glm::vec3(0.15, -1, -0.35));
@@ -153,32 +167,33 @@ class GrassFieldScene : public Scene {
         floorNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/flat_plane_3/flat_plane.obj").string().c_str());
 
         floorNode.model->transform.position = glm::vec3(0, -2, 0);
-        floorNode.model->transform.scale = glm::vec3(200, 1, 200);
+        floorNode.model->transform.scale = glm::vec3(floorSize, 1, floorSize);
         floorNode.model->transform.rotation = glm::vec3(0, 0, 0);
         floorNode.modelInstances = 1;
         floorNode.isActive = true;
-        rootNode.childNodes.emplace("floorNode", std::move(floorNode));
 
         std::cout << "Floor (vertices, faces): "  << floorNode.model->meshes[0].vertices.size() << ", " << floorNode.model->meshes[0].indices.size() / 3 << std::endl;
 
         int instancesPerNode = instancedDataSize / (subSetsRoot * subSetsRoot);
-        int instancedDataRowsPerNode = instancedDataRows / (subSetsRoot * subSetsRoot);
+        int instancedDataRowsPerNode = instancedDataRows / subSetsRoot;
+        int instancedDataColsPerNode = instancesPerNode / instancedDataRowsPerNode;
 
         for (int subsetI = 0; subsetI < subSetsRoot; subsetI++) {
             for (int subsetJ = 0; subsetJ < subSetsRoot; subsetJ++) {
                 SceneNode instancesNode;
 
                 instancesNode.model = std::make_unique<Model>(std::filesystem::path("../assets/models/grass_blade/grass_blade.obj").string().c_str());
-                //
-                // FIX POSITION
-                //
-                instancesNode.model->transform.position = glm::vec3(0, -2, 0);
+
+                glm::vec3 modelPos = glm::vec3((subsetI - subSetsRoot / 2) * floorSize / (subSetsRoot * 2.0), -2, (subsetJ - subSetsRoot / 2) * floorSize / (subSetsRoot * 2.0));
+                instancesNode.model->transform.position = modelPos;
                 instancesNode.model->transform.scale = glm::vec3(0.15, 0.1, 0.15);
                 instancesNode.model->transform.rotation = glm::vec3(0, 0, 0);
-                instancesNode.modelInstances = instancedDataSize;
+                instancesNode.modelInstances = instancesPerNode;
                 instancesNode.isActive = true;
 
-                std::cout << "Grass blade (vertices, faces): " << instancesNode.model->meshes[0].vertices.size() << ", " << instancesNode.model->meshes[0].indices.size() / 3 << std::endl;
+                if (subsetI == 0 && subsetJ == 0) {
+                    std::cout << "Grass blade (vertices, faces): " << instancesNode.model->meshes[0].vertices.size() << ", " << instancesNode.model->meshes[0].indices.size() / 3 << std::endl;
+                }
 
                 // CREATE SSBO
                 std::string heightmapTexturePath = std::filesystem::path("../assets/textures/heightmap_circle.png").string();
@@ -190,22 +205,18 @@ class GrassFieldScene : public Scene {
                 GLuint instancedDataSSBO;
                 std::vector<InstancedData> instancedData;
 
-                //
-                // CORRECT USE THE PER NODE VARIABLES
-                //
-                int instancedDataCols = instancedDataSize / instancedDataRows;
-                for (int i = -instancedDataRows / 2; i < instancedDataRows / 2; i++) {
-                    for (int j = -instancedDataCols / 2; j < instancedDataCols / 2; j++) {
+                for (int i = -instancedDataRowsPerNode / 2; i < instancedDataRowsPerNode / 2; i++) {
+                    for (int j = -instancedDataColsPerNode / 2; j < instancedDataColsPerNode / 2; j++) {
 
                         float rX = rand() / (float) RAND_MAX;
                         float rY = rand() / (float) RAND_MAX;
                         float rZ = rand() / (float) RAND_MAX;
 
-                        float rowPercentage = (i + instancedDataRows / 2.0 + 0.5) / instancedDataRows;
-                        float colPercentage = (j + instancedDataCols / 2.0 + 0.5) / instancedDataCols;
+                        float rowPercentage = (i + instancedDataRowsPerNode / 2.0 + 0.5) / instancedDataRowsPerNode;
+                        float colPercentage = (j + instancedDataColsPerNode / 2.0 + 0.5) / instancedDataColsPerNode;
 
-                        float u = colPercentage;
-                        float v = rowPercentage;
+                        float u = (subsetI + colPercentage) / subSetsRoot;
+                        float v = (subsetJ + rowPercentage) / subSetsRoot;
 
                         int x = (int)(u * (width - 1));
                         int y = (int)(v * (height - 1));
@@ -213,11 +224,8 @@ class GrassFieldScene : public Scene {
                         unsigned char* pixelOffset = heightData + (y * width + x) * nrChannels;
                         float heightPercentage = pixelOffset[0] / 255.0;
 
-                        //
-                        // YOU ALSO HAVE TO USE THE POSITION OF THE INSTANCED OBJECT
-                        //
-                        float xPos = (u - 0.5) * floorNode.model->transform.scale.x;
-                        float zPos = (v - 0.5) * floorNode.model->transform.scale.z;
+                        float xPos = (u - 0.5) * floorSize;
+                        float zPos = (v - 0.5) * floorSize;
                         float yPos = heightPercentage * maxFloorHeight;
 
                         // if (heightPercentage > 0) {
@@ -225,14 +233,15 @@ class GrassFieldScene : public Scene {
                         // }
 
                         glm::vec4 pos = glm::vec4(
-                            (xPos + 0.2 * (1 - rX)) / instancesNode.model->transform.scale.x,
-                            (yPos - 0.3 * (1 - rY)) / instancesNode.model->transform.scale.y,
-                            (zPos + 0.2 * (1 - rZ)) / instancesNode.model->transform.scale.z,
+                            (xPos - modelPos.x + 0.2 * (1 - rX)) / instancesNode.model->transform.scale.x,
+                            (yPos - modelPos.y + 0.3 * (1 - rY)) / instancesNode.model->transform.scale.y,
+                            (zPos - modelPos.z + 0.2 * (1 - rZ)) / instancesNode.model->transform.scale.z,
                             0
                         );
 
                         // glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
-                        glm::vec4 color = glm::vec4(0.486, 0.998, 0, 0);
+                        glm::vec4 color = glm::vec4((subsetI + 1) / (float) subSetsRoot, 0.1, (subsetJ + 1) / (float) subSetsRoot, 0); 
+                        // glm::vec4 color = glm::vec4(0.486, 0.998, 0, 0);
 
                         InstancedData dt(pos, color);
                         instancedData.push_back(dt);
@@ -245,11 +254,23 @@ class GrassFieldScene : public Scene {
                 glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(InstancedData) * instancedData.size(), instancedData.data(), GL_DYNAMIC_COPY);
                 glBindBufferBase(GL_SHADER_STORAGE_BUFFER, INSTANCED_DATA_SSBO_INDEX, instancedDataSSBO);
 
-                rootNode.childNodes.emplace("instancesNode" + subsetI + subsetJ, std::move(instancesNode));
-                instancedDataSSBOMap.emplace("instancesNode" + subsetI + subsetJ, instancedDataSSBO);
-                instancedDataMap.emplace("instancesNode" + subsetI + subsetJ, instancedData);
+                // rootNode.childNodes.emplace("instancesNode" + subsetI + subsetJ, std::move(instancesNode));
+                // instancedDataSSBOMap.emplace("instancesNode" + subsetI + subsetJ, instancedDataSSBO);
+                // instancedDataMap.emplace("instancesNode" + subsetI + subsetJ, instancedData);
+
+                std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
+
+                auto [it, inserted] = rootNode.childNodes.emplace(key, std::move(instancesNode));
+                SceneNode* nodePtr = &it->second;
+
+                instancedDataSSBOMap[nodePtr] = instancedDataSSBO;
+                instancedDataMap[nodePtr] = std::move(instancedData);
+
+                std::cout << "Created chunk: " << key << ", at pos: " << glm::to_string(modelPos) << std::endl;
             }
         }
+
+        rootNode.childNodes.emplace("floorNode", std::move(floorNode));
     }
 
     void setUpRenderBatches() {
@@ -266,8 +287,16 @@ class GrassFieldScene : public Scene {
 
         for (int subsetI = 0; subsetI < subSetsRoot; subsetI++) {
             for (int subsetJ = 0; subsetJ < subSetsRoot; subsetJ++) {
-                auto& instancesNodeRef = rootNode.childNodes["instancesNode" + subsetI + subsetJ];
-                renderBatches[solidColorMaterialInstnced].push_back(&instancesNodeRef);
+
+                std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
+
+                auto it = rootNode.childNodes.find(key);
+                if (it == rootNode.childNodes.end()) {
+                    std::cout << "Missing node: " << key << std::endl;
+                    continue;
+                }
+
+                renderBatches[solidColorMaterialInstnced].push_back(&it->second);
             }
         }
 
@@ -541,8 +570,6 @@ class GrassFieldScene : public Scene {
         } else if (nrChannels == 4) {
             format = GL_RGBA;
         } 
-
-        std::cout << nrChannels << std::endl;
 
         if (heightData) {
             glTexImage2D(
