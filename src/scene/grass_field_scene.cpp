@@ -46,8 +46,6 @@ class GrassFieldScene : public Scene {
     public:
     GrassFieldScene(unsigned int SCR_WIDTH, unsigned int SCR_HEIGHT) : 
         SCR_WIDTH(SCR_WIDTH), SCR_HEIGHT(SCR_HEIGHT), camera(glm::vec3(0, 1, 0), glm::vec3(0, 0, -1), glm::vec3(0), 0, -90, 75) {
-        
-        std::cout << "Entering grass_field scene!" << std::endl;
 
         setUpScene();
 
@@ -71,7 +69,7 @@ class GrassFieldScene : public Scene {
 
         updateUBOs();
  
-        glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
+        glBindFramebuffer(GL_FRAMEBUFFER, msaaRenderFBO);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glActiveTexture(GL_TEXTURE0 + HEIGHT_MAP_INDEX);
@@ -102,7 +100,7 @@ class GrassFieldScene : public Scene {
         
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        renderQuad(*renderShader, renderTexture);
+        renderQuad(*renderShader);
     }
 
     void update(float dt, std::map<int, bool>& keyboard, glm::vec2 mouseMovement) override {
@@ -146,6 +144,7 @@ class GrassFieldScene : public Scene {
     // renderTexture
     Shader* renderShader = new Shader("../src/shaders/vertex_shaders/render_shader.vs", "../src/shaders/fragment_shaders/render_shader.fs");
     unsigned int renderFBO, renderDepthRBO, renderTexture;
+    unsigned int msaaRenderFBO, msaaRenderDepthRBO, msaaRenderTexture;
     // skybox
     Shader* skyboxShader = new Shader("../src/shaders/vertex_shaders/skybox_shader.vs", "../src/shaders/fragment_shaders/skybox_shader.fs");
     unsigned int skyboxVAO, skyBoxTexture;
@@ -234,7 +233,7 @@ class GrassFieldScene : public Scene {
 
                         glm::vec4 pos = glm::vec4(
                             (xPos - modelPos.x + 0.2 * (1 - rX)) / instancesNode.model->transform.scale.x,
-                            (yPos - modelPos.y + 0.3 * (1 - rY)) / instancesNode.model->transform.scale.y,
+                            (yPos + 0.3 * (1 - rY)) / instancesNode.model->transform.scale.y,
                             (zPos - modelPos.z + 0.2 * (1 - rZ)) / instancesNode.model->transform.scale.z,
                             0
                         );
@@ -281,20 +280,20 @@ class GrassFieldScene : public Scene {
         solidColorMaterialInstnced->bindVec3("color", glm::vec3(1.0));
         solidColorMaterialInstnced->bindInt("shadowMap", SHADOW_MAP_INDEX);
 
-        for (int subsetI = 0; subsetI < subSetsRoot; subsetI++) {
-            for (int subsetJ = 0; subsetJ < subSetsRoot; subsetJ++) {
+        // for (int subsetI = 0; subsetI < subSetsRoot; subsetI++) {
+        //     for (int subsetJ = 0; subsetJ < subSetsRoot; subsetJ++) {
 
-                std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
+        //         std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
 
-                auto it = rootNode.childNodes.find(key);
-                if (it == rootNode.childNodes.end()) {
-                    std::cout << "Missing node: " << key << std::endl;
-                    continue;
-                }
+        //         auto it = rootNode.childNodes.find(key);
+        //         if (it == rootNode.childNodes.end()) {
+        //             std::cout << "Missing node: " << key << std::endl;
+        //             continue;
+        //         }
 
-                renderBatches[solidColorMaterialInstnced].push_back(&it->second);
-            }
-        }
+        //         renderBatches[solidColorMaterialInstnced].push_back(&it->second);
+        //     }
+        // }
 
         Shader* floorShader = new Shader("../src/shaders/vertex_shaders/floor_shader.vs", "../src/shaders/fragment_shaders/floor_shader.fs");
         Material* floorMaterial = new Material(floorShader);
@@ -333,23 +332,33 @@ class GrassFieldScene : public Scene {
         glReadBuffer(GL_NONE);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-        // Render
-        // Generate depth Render Buffer Object that will hold the depth buffer values for the render frame buffer
+        // Create the msaa render FBO
+        glGenRenderbuffers(1, &msaaRenderDepthRBO);
+        glBindRenderbuffer(GL_RENDERBUFFER, msaaRenderDepthRBO);
+        glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
+
+        glGenFramebuffers(1, &msaaRenderFBO);
+        glGenTextures(1, &msaaRenderTexture);
+        glBindTexture(GL_TEXTURE_2D_MULTISAMPLE, msaaRenderTexture);
+        glTexImage2DMultisample(GL_TEXTURE_2D_MULTISAMPLE, 4, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, GL_TRUE);
+
+        glBindFramebuffer(GL_FRAMEBUFFER, msaaRenderFBO);
+        glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, msaaRenderDepthRBO);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D_MULTISAMPLE, msaaRenderTexture, 0);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+        // Create the normal render FBO
         glGenRenderbuffers(1, &renderDepthRBO);
         glBindRenderbuffer(GL_RENDERBUFFER, renderDepthRBO);
         glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, SCR_WIDTH, SCR_HEIGHT);
 
-        // Generate the Frame Buffer Object and the texture that will be rendered on the renderQuad
         glGenFramebuffers(1, &renderFBO);
         glGenTextures(1, &renderTexture);
         glBindTexture(GL_TEXTURE_2D, renderTexture);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT); 
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);  
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-        // Bind the renderTexture and renderDepthRBO on the renderFBO
         glBindFramebuffer(GL_FRAMEBUFFER, renderFBO);
         glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, renderDepthRBO);
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, renderTexture, 0);
@@ -384,7 +393,7 @@ class GrassFieldScene : public Scene {
         glBindTexture(GL_TEXTURE_2D, depthMap);
     }
 
-    void renderQuad(Shader& shader, unsigned int renderTexture) {
+    void renderQuad(Shader& shader) {
         static unsigned int quadVAO = 0, quadVBO;
         if (quadVAO == 0) {
             float quadVertices[] = {
@@ -405,6 +414,13 @@ class GrassFieldScene : public Scene {
         }
 
         shader.use();
+
+        // Copy the msaaRenderFBO on the renderFBO
+        glBindFramebuffer(GL_READ_FRAMEBUFFER, msaaRenderFBO);
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, renderFBO);
+
+        glBlitFramebuffer(0, 0, SCR_WIDTH, SCR_HEIGHT, 0, 0, SCR_WIDTH, SCR_HEIGHT, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, renderTexture);
