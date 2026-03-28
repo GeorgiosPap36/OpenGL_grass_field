@@ -266,7 +266,7 @@ class GrassFieldScene : public Scene {
                 instancedDataSSBOMap[nodePtr] = instancedDataSSBO;
                 instancedDataMap[nodePtr] = std::move(instancedData);
 
-                std::cout << "Created chunk: " << key << ", at pos: " << glm::to_string(modelPos) << std::endl;
+                // std::cout << "Created chunk: " << key << ", at pos: " << glm::to_string(modelPos) << std::endl;
             }
         }
 
