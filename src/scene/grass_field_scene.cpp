@@ -112,7 +112,7 @@ class GrassFieldScene : public Scene {
             }
 
             Model& model = *node.model;
-            node.isActive = glm::distance(model.transform.position, camera.position) < 60;
+            node.isActive = glm::distance(model.transform.position, camera.position) < 66.6;
         }
     }
 
@@ -126,7 +126,7 @@ class GrassFieldScene : public Scene {
     // Instanced data
     std::map<SceneNode*, GLuint> instancedDataSSBOMap;
     std::map<SceneNode*, std::vector<InstancedData>> instancedDataMap;
-    int instancedDataSize = 6250000, instancedDataRows = 2500, subSetsRoot = 20;
+    int instancedDataSize = 5760000, instancedDataRows = 2400, subSetsRoot = 20;
     float floorSize = 400.0;
 
     unsigned int SCR_WIDTH, SCR_HEIGHT;
@@ -238,9 +238,8 @@ class GrassFieldScene : public Scene {
                             0
                         );
 
-                        // glm::vec4 color = glm::vec4(rowPercentage, 0.5, colPercentage, 0);
-                        glm::vec4 color = glm::vec4((subsetI + 1) / (float) subSetsRoot, 0.1, (subsetJ + 1) / (float) subSetsRoot, 0); 
-                        // glm::vec4 color = glm::vec4(0.486, 0.998, 0, 0);
+                        // glm::vec4 color = glm::vec4((subsetI + 1) / (float) subSetsRoot, 0.1, (subsetJ + 1) / (float) subSetsRoot, 0); 
+                        glm::vec4 color = glm::vec4(0.486, 0.998, 0, 0);
 
                         InstancedData dt(pos, color);
                         instancedData.push_back(dt);
@@ -280,20 +279,20 @@ class GrassFieldScene : public Scene {
         solidColorMaterialInstnced->bindVec3("color", glm::vec3(1.0));
         solidColorMaterialInstnced->bindInt("shadowMap", SHADOW_MAP_INDEX);
 
-        // for (int subsetI = 0; subsetI < subSetsRoot; subsetI++) {
-        //     for (int subsetJ = 0; subsetJ < subSetsRoot; subsetJ++) {
+        for (int subsetI = 0; subsetI < subSetsRoot; subsetI++) {
+            for (int subsetJ = 0; subsetJ < subSetsRoot; subsetJ++) {
 
-        //         std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
+                std::string key = "instancesNode_" + std::to_string(subsetI) + "_" + std::to_string(subsetJ);
 
-        //         auto it = rootNode.childNodes.find(key);
-        //         if (it == rootNode.childNodes.end()) {
-        //             std::cout << "Missing node: " << key << std::endl;
-        //             continue;
-        //         }
+                auto it = rootNode.childNodes.find(key);
+                if (it == rootNode.childNodes.end()) {
+                    std::cout << "Missing node: " << key << std::endl;
+                    continue;
+                }
 
-        //         renderBatches[solidColorMaterialInstnced].push_back(&it->second);
-        //     }
-        // }
+                renderBatches[solidColorMaterialInstnced].push_back(&it->second);
+            }
+        }
 
         Shader* floorShader = new Shader("../src/shaders/vertex_shaders/floor_shader.vs", "../src/shaders/fragment_shaders/floor_shader.fs");
         Material* floorMaterial = new Material(floorShader);
